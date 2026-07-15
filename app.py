@@ -2,6 +2,7 @@ from flask import Flask, render_template_string, request, send_file, redirect
 from datetime import datetime
 from PIL import Image, ImageDraw, ImageFont
 import os
+import re
 
 app = Flask(__name__)
 
@@ -28,93 +29,96 @@ HTML_TEMPLATE = """
         input, select, textarea { width: 100%; padding: 11px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 14px; color: #334155; background-color: #fff; }
         .btn { display: block; width: 100%; padding: 14px; border: none; border-radius: 8px; font-size: 16px; font-weight: bold; text-align: center; cursor: pointer; text-decoration: none; }
         .btn-primary { background-color: #2563eb; color: white; box-shadow: 0 4px 6px rgb(37 99 235 / 0.2); }
+        .btn-primary:hover { background-color: #1d4ed8; }
         .btn-success { background-color: #059669; color: white; margin-top: 15px; box-shadow: 0 4px 6px rgb(5 150 105 / 0.2); }
         .receipt-box { text-align: center; background-color: #f8fafc; padding: 15px; border-radius: 12px; border: 2px dashed #cbd5e1; }
         .receipt-preview { max-width: 100%; height: auto; border-radius: 8px; box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1); }
         .item-row { display: flex; gap: 10px; margin-bottom: 8px; }
         .item-name { flex: 3; }
         .item-price { flex: 1; }
+        .success-message { background-color: #d1fae5; color: #065f46; padding: 12px; border-radius: 8px; margin-bottom: 16px; }
     </style>
 </head>
 <body>
-    <div class="app-bar">🔧 T&K SYSTEMS PREMIUM CREATOR</div>
+    <div class="app-bar">T&K SYSTEMS BILL CREATOR</div>
     
     <div class="card">
-        <h2>📝 ข้อมูลบันทึกงานซ่อม / ติดตั้งอุปกรณ์</h2>
+        <h2>Bill Details</h2>
         <form action="/create_bill" method="POST">
             <div class="row">
                 <div class="col">
-                    <label>ชื่อ-นามสกุล ลูกค้า *</label>
-                    <input type="text" name="name" placeholder="ระบุชื่อลูกค้า" required>
+                    <label>Customer Name *</label>
+                    <input type="text" name="name" placeholder="Enter customer name" required>
                 </div>
                 <div class="col">
-                    <label>เบอร์โทรศัพท์ติดต่อ *</label>
-                    <input type="text" name="phone" placeholder="ระบุเบอร์ติดต่อ" required>
+                    <label>Phone Number *</label>
+                    <input type="text" name="phone" placeholder="Enter phone number" required>
                 </div>
             </div>
             
             <div class="form-group">
-                <label>สถานที่ปฏิบัติงาน / ที่อยู่ลูกค้า</label>
-                <input type="text" name="address" placeholder="บ้านเลขที่ หมู่ ซอย ถนน">
+                <label>Address</label>
+                <input type="text" name="address" placeholder="Enter address">
             </div>
 
             <div class="row">
                 <div class="col">
-                    <label>ประเภทงาน (บันทึกรับงาน)</label>
+                    <label>Job Type</label>
                     <select name="job_type">
-                        <option>🔧 งานซ่อมบำรุง</option>
-                        <option>💻 งานไอที / Electronics</option>
-                        <option>⚙️ งานติดตั้งอุปกรณ์</option>
-                        <option>📦 งานบริการอื่นๆ</option>
+                        <option>Maintenance</option>
+                        <option>IT / Electronics</option>
+                        <option>Installation</option>
+                        <option>Other Services</option>
                     </select>
                 </div>
                 <div class="col">
-                    <label>ประเภทอุปกรณ์ระบบไฟฟ้า</label>
+                    <label>Device Type</label>
                     <select name="device">
-                        <option>เครื่องปรับอากาศ</option>
-                        <option>เครื่องซักผ้า</option>
-                        <option>โทรทัศน์</option>
-                        <option>ตู้เย็น</option>
-                        <option>เครื่องทำน้ำอุ่น</option>
-                        <option>ระบบไฟฟ้าในบ้าน</option>
-                        <option>อื่นๆ</option>
+                        <option>Air Conditioner</option>
+                        <option>Washing Machine</option>
+                        <option>Television</option>
+                        <option>Refrigerator</option>
+                        <option>Water Heater</option>
+                        <option>Electrical System</option>
+                        <option>Other</option>
                     </select>
                 </div>
             </div>
 
             <div class="form-group">
-                <label>ลักษณะอาการชำรุด / ปัญหาที่พบ</label>
-                <textarea name="symptom" rows="2" placeholder="ระบุรายละเอียดอาการเสียของอุปกรณ์"></textarea>
+                <label>Problem Description</label>
+                <textarea name="symptom" rows="2" placeholder="Describe the problem"></textarea>
             </div>
 
-            <h2 style="font-size:14px; margin-top:20px; color:#1e3a8a;">🛠️ ตารางบันทึกวัสดุ / รายการอะไหล่ / ค่าบริการ</h2>
+            <h2 style="font-size:14px; margin-top:20px; color:#1e3a8a;">Items / Parts / Services</h2>
             <div class="form-group">
                 <div class="item-row">
-                    <input type="text" name="item1" class="item-name" placeholder="รายการที่ 1">
-                    <input type="number" name="p1" class="item-price" placeholder="บาท" value="0">
+                    <input type="text" name="item1" class="item-name" placeholder="Item 1">
+                    <input type="number" name="p1" class="item-price" placeholder="Price" value="0" step="0.01">
                 </div>
                 <div class="item-row">
-                    <input type="text" name="item2" class="item-name" placeholder="รายการที่ 2">
-                    <input type="number" name="p2" class="item-price" placeholder="บาท" value="0">
+                    <input type="text" name="item2" class="item-name" placeholder="Item 2">
+                    <input type="number" name="p2" class="item-price" placeholder="Price" value="0" step="0.01">
                 </div>
                 <div class="item-row">
-                    <input type="text" name="item3" class="item-name" placeholder="รายการที่ 3">
-                    <input type="number" name="p3" class="item-price" placeholder="บาท" value="0">
+                    <input type="text" name="item3" class="item-name" placeholder="Item 3">
+                    <input type="number" name="p3" class="item-price" placeholder="Price" value="0" step="0.01">
                 </div>
             </div>
 
-            <button type="submit" class="btn btn-primary">💾 ประมวลผลและออกบิลแจ้งซ่อมดีไซน์โมเดิร์น</button>
+            <button type="submit" class="btn btn-primary">Generate Bill</button>
         </form>
     </div>
     
     <div class="card">
-        <h2>📋 ใบแจ้งซ่อม / ใบเสร็จรับเงินล่าสุด</h2>
+        <h2>Latest Bill</h2>
         <div class="receipt-box">
             {% if last_img %}
+                <div class="success-message">Bill created successfully!</div>
                 <img src="/get_image/{{ last_img }}" class="receipt-preview">
-                <a href="/get_image/{{ last_img }}" download class="btn btn-success">📥 บันทึกรูปบิลลงเครื่องมือถือเพื่อพิมพ์</a>
+                <a href="/get_image/{{ last_img }}" download class="btn btn-success">Download Bill</a>
             {% else %}
-                <p style="color: #94a3b8; font-size: 14px; padding: 40px 0;">กรอกรายละเอียดงานและรายการอะไหล่ด้านบน จากนั้นกดปุ่มเพื่อสร้างบิล</p>
+                <p style="color: #94a3b8; font-size: 14px; padding: 40px 0;">Fill in the details above and click Generate Bill</p>
             {% endif %}
         </div>
     </div>
@@ -129,118 +133,156 @@ def index():
 
 @app.route('/create_bill', methods=['POST'])
 def create_bill():
-    name = request.form.get('name', 'N/A')
-    phone = request.form.get('phone', 'N/A')
-    address = request.form.get('address', '')
-    device = request.form.get('device', 'N/A')
-    job_type = request.form.get('job_type', 'N/A')
-    symptom = request.form.get('symptom', '')
-    current_date = datetime.now().strftime("%Y-%m-%d %H:%M")
-    bill_id = datetime.now().strftime("%d%H%M%S")
-    
-    items = []
-    total_price = 0.0
-    for i in range(1, 4):
-        item_text = request.form.get(f'item{i}', '')
-        item_p = request.form.get(f'p{i}', '0')
-        try:
-            p_val = float(item_p) if item_p else 0.0
-        except:
-            p_val = 0.0
-        if item_text:
-            items.append((item_text, p_val))
-            total_price += p_val
-
-    # สร้างรูปภาพ
-    img = Image.new('RGB', (550, 1150), color='#FFFFFF')
-    draw = ImageDraw.Draw(img)
-    
-    # ลองใช้ font ตัวหนา หรือ default
     try:
-        font_bold = ImageFont.truetype("ThaiFont.ttf", 34)
-        font_normal = ImageFont.truetype("ThaiFont.ttf", 24)
-        font_small = ImageFont.truetype("ThaiFont.ttf", 20)
-    except:
+        name = request.form.get('name', 'N/A').strip()
+        phone = request.form.get('phone', 'N/A').strip()
+        address = request.form.get('address', '').strip()
+        device = request.form.get('device', 'N/A').strip()
+        job_type = request.form.get('job_type', 'N/A').strip()
+        symptom = request.form.get('symptom', '').strip()
+        current_date = datetime.now().strftime("%Y-%m-%d %H:%M")
+        bill_id = datetime.now().strftime("%d%H%M%S")
+        
+        items = []
+        total_price = 0.0
+        for i in range(1, 4):
+            item_text = request.form.get(f'item{i}', '').strip()
+            item_p = request.form.get(f'p{i}', '0')
+            try:
+                p_val = float(item_p) if item_p else 0.0
+            except (ValueError, TypeError):
+                p_val = 0.0
+            if item_text:
+                items.append((item_text, p_val))
+                total_price += p_val
+
+        # Create image
+        img = Image.new('RGB', (550, 1200), color='white')
+        draw = ImageDraw.Draw(img)
+        
+        # Load fonts - use default if system fonts not available
         try:
-            font_bold = ImageFont.truetype("/usr/share/fonts/thai/Garuda.ttf", 34)
-            font_normal = ImageFont.truetype("/usr/share/fonts/thai/Garuda.ttf", 24)
-            font_small = ImageFont.truetype("/usr/share/fonts/thai/Garuda.ttf", 20)
+            font_bold = ImageFont.truetype("/system/fonts/Roboto-Bold.ttf", 18)
+            font_normal = ImageFont.truetype("/system/fonts/Roboto-Regular.ttf", 14)
+            font_small = ImageFont.truetype("/system/fonts/Roboto-Regular.ttf", 12)
         except:
-            font_bold = font_normal = font_small = ImageFont.load_default()
+            try:
+                font_bold = ImageFont.truetype("Arial.ttf", 18)
+                font_normal = ImageFont.truetype("Arial.ttf", 14)
+                font_small = ImageFont.truetype("Arial.ttf", 12)
+            except:
+                font_bold = font_normal = font_small = ImageFont.load_default()
         
-    draw.rectangle([(0, 0), (550, 75)], fill='#1E3A8A')
-    draw.text((275, 38), "T&K ELECTRICAL SERVICE", fill='#FFFFFF', font=font_bold, anchor="mm")
-    
-    draw.text((40, 105), "Bill / Receipt", fill='#0f172a', font=font_bold)
-    draw.text((40, 145), f"Doc ID: TK-{bill_id}", fill='#334155', font=font_normal)
-    draw.text((40, 180), f"Date: {current_date}", fill='#64748b', font=font_normal)
-    draw.line([(40, 215), (510, 215)], fill='#cbd5e1', width=2)
-    
-    draw.text((40, 235), f"Job Type: {job_type}", fill='#1e3a8a', font=font_bold)
-    draw.text((40, 270), f"Customer: {name}", fill='#334155', font=font_normal)
-    draw.text((40, 305), f"Phone: {phone}", fill='#334155', font=font_normal)
-    if address:
-        draw.text((40, 340), f"Address: {address}", fill='#334155', font=font_normal)
-        offset_y = 375
-    else:
-        offset_y = 340
+        # Draw header
+        draw.rectangle([(0, 0), (550, 60)], fill='#1E3A8A')
+        draw.text((275, 30), "T&K ELECTRICAL SERVICE", fill='white', font=font_bold, anchor="mm")
         
-    draw.text((40, offset_y), f"Device: {device}", fill='#334155', font=font_normal)
-    draw.text((40, offset_y+35), f"Issue: {symptom if symptom else 'General checkup'}", fill='#334155', font=font_normal)
+        y = 80
+        draw.text((40, y), "BILL / RECEIPT", fill='#0f172a', font=font_bold)
+        y += 25
+        
+        draw.text((40, y), f"Bill ID: TK-{bill_id}", fill='#334155', font=font_normal)
+        y += 20
+        
+        draw.text((40, y), f"Date: {current_date}", fill='#64748b', font=font_normal)
+        y += 20
+        
+        draw.line([(40, y), (510, y)], fill='#cbd5e1', width=2)
+        y += 15
+        
+        draw.text((40, y), f"Job Type: {job_type}", fill='#1e3a8a', font=font_bold)
+        y += 20
+        
+        draw.text((40, y), f"Customer: {name}", fill='#334155', font=font_normal)
+        y += 18
+        
+        draw.text((40, y), f"Phone: {phone}", fill='#334155', font=font_normal)
+        y += 18
+        
+        if address:
+            draw.text((40, y), f"Address: {address}", fill='#334155', font=font_normal)
+            y += 18
+        
+        draw.text((40, y), f"Device: {device}", fill='#334155', font=font_normal)
+        y += 18
+        
+        draw.text((40, y), f"Problem: {symptom if symptom else 'General checkup'}", fill='#334155', font=font_normal)
+        y += 20
+        
+        draw.line([(40, y), (510, y)], fill='#cbd5e1', width=2)
+        y += 15
+        
+        draw.text((40, y), "ITEMS / SERVICES", fill='#0f172a', font=font_bold)
+        y += 22
+        
+        if not items:
+            draw.text((40, y), "- General maintenance -", fill='#64748b', font=font_normal)
+            y += 20
+        else:
+            for it_title, it_cost in items:
+                draw.text((40, y), f"* {it_title}", fill='#334155', font=font_normal)
+                draw.text((500, y), f"{it_cost:,.2f}", fill='#334155', font=font_normal, anchor="rm")
+                y += 20
+        
+        draw.line([(40, y + 5), (510, y + 5)], fill='#1E3A8A', width=3)
+        y += 20
+        
+        draw.text((40, y), "TOTAL", fill='#0f172a', font=font_bold)
+        draw.text((500, y), f"{total_price:,.2f} THB", fill='#1E3A8A', font=font_bold, anchor="rm")
+        y += 25
+        
+        draw.line([(40, y), (510, y)], fill='#cbd5e1', width=1)
+        y += 15
+        
+        draw.text((40, y), "SERVICE TERMS", fill='#1e3a8a', font=font_bold)
+        y += 18
+        
+        cond_lines = [
+            "1. Warranty: 30 days from delivery",
+            "2. Deposit: 50% for special parts",
+            "3. Thank you for choosing T&K SERVICE"
+        ]
+        
+        for line in cond_lines:
+            draw.text((40, y), line, fill='#475569', font=font_small)
+            y += 16
+        
+        # Save image
+        filename = f"bill_TK{bill_id}.png"
+        filepath = os.path.join('bills', filename)
+        img.save(filepath)
+        
+        print(f"SUCCESS: Bill created: {filename}")
+        return redirect(f"/?last_img={filename}")
     
-    draw.line([(40, offset_y+75), (510, offset_y+75)], fill='#cbd5e1', width=2)
-    
-    draw.text((40, offset_y+95), "Item Details / Service Cost", fill='#0f172a', font=font_bold)
-    y_offset = offset_y + 135
-    
-    if not items:
-        draw.text((40, y_offset), "- General maintenance -", fill='#64748b', font=font_normal)
-        y_offset += 35
-    else:
-        for it_title, it_cost in items:
-            draw.text((40, y_offset), f"• {it_title}", fill='#334155', font=font_normal)
-            draw.text((510, y_offset), f"{it_cost:,.2f}", fill='#334155', font=font_normal, anchor="ra")
-            y_offset += 35
-            
-    draw.line([(40, y_offset+10), (510, y_offset+10)], fill='#1E3A8A', width=3)
-    
-    draw.text((40, y_offset+40), "Total Amount", fill='#0f172a', font=font_bold)
-    draw.text((510, y_offset+40), f"{total_price:,.2f} THB", fill='#1E3A8A', font=font_bold, anchor="ra")
-    draw.line([(40, y_offset+75), (510, y_offset+75)], fill='#cbd5e1', width=1)
-    
-    y_cond = y_offset + 95
-    draw.text((40, y_cond), "Service Terms", fill='#1e3a8a', font=font_bold)
-    
-    cond_lines = [
-        "1. 30-day warranty from delivery date",
-        "2. 50% advance payment for special parts",
-        "3. Thank you for your trust in T&K"
-    ]
-    
-    y_cond += 35
-    for line in cond_lines:
-        draw.text((40, y_cond), line, fill='#475569', font=font_small)
-        y_cond += 28
-    
-    # บันทึกรูปภาพ
-    filename = f"bill_TK{bill_id}.png"
-    filepath = os.path.join('bills', filename)
-    img.save(filepath)
-    
-    return redirect(f"/?last_img={filename}")
+    except Exception as e:
+        print(f"ERROR: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return f"Error: {str(e)}", 500
 
 @app.route('/get_image/<filename>')
 def get_image(filename):
-    """ดาวน์โหลดรูปภาพบิล"""
+    """Download bill image"""
+    if not re.match(r'^bill_TK\d{8}\.png$', filename):
+        return "Invalid file", 400
+    
     try:
+        filepath = os.path.join('bills', filename)
+        if not os.path.abspath(filepath).startswith(os.path.abspath('bills')):
+            return "Invalid file", 400
+            
         return send_file(
-            os.path.join('bills', filename),
+            filepath,
             mimetype='image/png',
-            as_attachment=True,
-            download_name=filename
+            as_attachment=False,
         )
     except FileNotFoundError:
         return "File not found", 404
+    except Exception as e:
+        return f"Error: {str(e)}", 500
 
 if __name__ == '__main__':
+    print("Starting T&K SERVICE CREATOR")
+    print("Open: http://127.0.0.1:5000")
     app.run(debug=True, host='0.0.0.0', port=5000)
