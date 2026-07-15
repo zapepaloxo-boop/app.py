@@ -29,12 +29,14 @@ HTML_TEMPLATE = """
         input, select, textarea { width: 100%; padding: 11px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 14px; color: #334155; background-color: #fff; }
         .btn { display: block; width: 100%; padding: 14px; border: none; border-radius: 8px; font-size: 16px; font-weight: bold; text-align: center; cursor: pointer; text-decoration: none; }
         .btn-primary { background-color: #2563eb; color: white; box-shadow: 0 4px 6px rgb(37 99 235 / 0.2); }
+        .btn-primary:hover { background-color: #1d4ed8; }
         .btn-success { background-color: #059669; color: white; margin-top: 15px; box-shadow: 0 4px 6px rgb(5 150 105 / 0.2); }
         .receipt-box { text-align: center; background-color: #f8fafc; padding: 15px; border-radius: 12px; border: 2px dashed #cbd5e1; }
         .receipt-preview { max-width: 100%; height: auto; border-radius: 8px; box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1); }
         .item-row { display: flex; gap: 10px; margin-bottom: 8px; }
         .item-name { flex: 3; }
         .item-price { flex: 1; }
+        .success-message { background-color: #d1fae5; color: #065f46; padding: 12px; border-radius: 8px; margin-bottom: 16px; }
     </style>
 </head>
 <body>
@@ -85,22 +87,22 @@ HTML_TEMPLATE = """
 
             <div class="form-group">
                 <label>ลักษณะอาการชำรุด / ปัญหาที่พบ</label>
-                <textarea name="symptom" rows="2" placeholder="ระบุรายละเอียดอาการเสียของ��ุปกรณ์"></textarea>
+                <textarea name="symptom" rows="2" placeholder="ระบุรายละเอียดอาการเสียของอุปกรณ์"></textarea>
             </div>
 
             <h2 style="font-size:14px; margin-top:20px; color:#1e3a8a;">🛠️ ตารางบันทึกวัสดุ / รายการอะไหล่ / ค่าบริการ</h2>
             <div class="form-group">
                 <div class="item-row">
                     <input type="text" name="item1" class="item-name" placeholder="รายการที่ 1">
-                    <input type="number" name="p1" class="item-price" placeholder="บาท" value="0">
+                    <input type="number" name="p1" class="item-price" placeholder="บาท" value="0" step="0.01">
                 </div>
                 <div class="item-row">
                     <input type="text" name="item2" class="item-name" placeholder="รายการที่ 2">
-                    <input type="number" name="p2" class="item-price" placeholder="บาท" value="0">
+                    <input type="number" name="p2" class="item-price" placeholder="บาท" value="0" step="0.01">
                 </div>
                 <div class="item-row">
                     <input type="text" name="item3" class="item-name" placeholder="รายการที่ 3">
-                    <input type="number" name="p3" class="item-price" placeholder="บาท" value="0">
+                    <input type="number" name="p3" class="item-price" placeholder="บาท" value="0" step="0.01">
                 </div>
             </div>
 
@@ -112,10 +114,11 @@ HTML_TEMPLATE = """
         <h2>📋 ใบแจ้งซ่อม / ใบเสร็จรับเงินล่าสุด</h2>
         <div class="receipt-box">
             {% if last_img %}
+                <div class="success-message">✅ สร้างบิลสำเร็จ!</div>
                 <img src="/get_image/{{ last_img }}" class="receipt-preview">
-                <a href="/get_image/{{ last_img }}" download class="btn btn-success">📥 บันทึกรูปบิลลงเครื่องมือถือเพื่อพิมพ์ปริ้นออก</a>
+                <a href="/get_image/{{ last_img }}" download class="btn btn-success">📥 บันทึกรูปบิลลงเครื่องมือถือเพื่อพิมพ์</a>
             {% else %}
-                <p style="color: #94a3b8; font-size: 14px; padding: 40px 0;">กรอกรายละเอียดงานและรายการอะไหล่ด้านบน จากนั้นกดปุ่ม ประมวลผล เพื่อสร้างบิล</p>
+                <p style="color: #94a3b8; font-size: 14px; padding: 40px 0;">กรอกรายละเอียดงานและรายการอะไหล่ด้านบน จากนั้นกด "ประมวลผลและออกบิล" เพื่อสร้างใบแจ้งซ่อม</p>
             {% endif %}
         </div>
     </div>
@@ -130,114 +133,121 @@ def index():
 
 @app.route('/create_bill', methods=['POST'])
 def create_bill():
-    name = request.form.get('name', 'N/A')
-    phone = request.form.get('phone', 'N/A')
-    address = request.form.get('address', '')
-    device = request.form.get('device', 'N/A')
-    job_type = request.form.get('job_type', 'N/A')
-    symptom = request.form.get('symptom', '')
-    current_date = datetime.now().strftime("%Y-%m-%d %H:%M")
-    bill_id = datetime.now().strftime("%d%H%M%S")
-    
-    items = []
-    total_price = 0.0
-    for i in range(1, 4):
-        item_text = request.form.get(f'item{i}', '')
-        item_p = request.form.get(f'p{i}', '0')
-        try:
-            p_val = float(item_p) if item_p else 0.0
-        except (ValueError, TypeError):
-            p_val = 0.0
-        if item_text:
-            items.append((item_text, p_val))
-            total_price += p_val
+    try:
+        name = request.form.get('name', 'N/A').strip()
+        phone = request.form.get('phone', 'N/A').strip()
+        address = request.form.get('address', '').strip()
+        device = request.form.get('device', 'N/A').strip()
+        job_type = request.form.get('job_type', 'N/A').strip()
+        symptom = request.form.get('symptom', '').strip()
+        current_date = datetime.now().strftime("%Y-%m-%d %H:%M")
+        bill_id = datetime.now().strftime("%d%H%M%S")
+        
+        items = []
+        total_price = 0.0
+        for i in range(1, 4):
+            item_text = request.form.get(f'item{i}', '').strip()
+            item_p = request.form.get(f'p{i}', '0')
+            try:
+                p_val = float(item_p) if item_p else 0.0
+            except (ValueError, TypeError):
+                p_val = 0.0
+            if item_text:
+                items.append((item_text, p_val))
+                total_price += p_val
 
-    # สร้างรูปภาพ
-    img = Image.new('RGB', (550, 1150), color='#FFFFFF')
-    draw = ImageDraw.Draw(img)
-    
-    # ลองใช้ font ตัวหนา หรือ default
-    font_bold = font_normal = font_small = None
-    font_paths = [
-        "ThaiFont.ttf",
-        "/usr/share/fonts/thai/Garuda.ttf",
-        "/usr/share/fonts/truetype/thai/Garuda.ttf",
-        "/System/Library/Fonts/Tahoma.ttf",
-    ]
-    
-    for font_path in font_paths:
-        try:
-            font_bold = ImageFont.truetype(font_path, 34)
-            font_normal = ImageFont.truetype(font_path, 24)
-            font_small = ImageFont.truetype(font_path, 20)
-            break
-        except (IOError, OSError):
-            continue
-    
-    # ถ้าไม่มีฟอนต์ไหนได้ ใช้ default
-    if font_bold is None:
-        font_bold = font_normal = font_small = ImageFont.load_default()
+        # สร้างรูปภาพ
+        img = Image.new('RGB', (550, 1150), color='white')
+        draw = ImageDraw.Draw(img)
         
-    draw.rectangle([(0, 0), (550, 75)], fill='#1E3A8A')
-    draw.text((275, 38), "T&K ELECTRICAL SERVICE", fill='#FFFFFF', font=font_bold, anchor="mm")
-    
-    draw.text((40, 105), "ใบแจ้งซ่อม / ใบรับงาน", fill='#0f172a', font=font_bold)
-    draw.text((40, 145), f"เลขที่เอกสาร: TK-{bill_id}", fill='#334155', font=font_normal)
-    draw.text((40, 180), f"วันที่ปฏิบัติงาน: {current_date}", fill='#64748b', font=font_normal)
-    draw.line([(40, 215), (510, 215)], fill='#cbd5e1', width=2)
-    
-    draw.text((40, 235), f"ประเภทงาน: {job_type}", fill='#1e3a8a', font=font_bold)
-    draw.text((40, 270), f"ลูกค้า: {name}", fill='#334155', font=font_normal)
-    draw.text((40, 305), f"เบอร์โทรติดต่อ: {phone}", fill='#334155', font=font_normal)
-    if address:
-        draw.text((40, 340), f"สถานที่: {address}", fill='#334155', font=font_normal)
-        offset_y = 375
-    else:
-        offset_y = 340
+        # ลองใช้ font ตัวหนา หรือ default
+        font_bold = font_normal = font_small = None
+        font_paths = [
+            "ThaiFont.ttf",
+            "/usr/share/fonts/thai/Garuda.ttf",
+            "/usr/share/fonts/truetype/thai/Garuda.ttf",
+            "/System/Library/Fonts/Tahoma.ttf",
+            "/usr/share/fonts/truetype/liberation/LiberationSerif-Bold.ttf",
+        ]
         
-    draw.text((40, offset_y), f"อุปกรณ์ที่ให้บริการ: {device}", fill='#334155', font=font_normal)
-    draw.text((40, offset_y+35), f"อาการชำรุด: {symptom if symptom else 'ตรวจเช็กสภาพระบบทั่วไป'}", fill='#334155', font=font_normal)
-    
-    draw.line([(40, offset_y+75), (510, offset_y+75)], fill='#cbd5e1', width=2)
-    
-    draw.text((40, offset_y+95), "รายละเอียดรายการวัสดุ / ค่าบริการ", fill='#0f172a', font=font_bold)
-    y_offset = offset_y + 135
-    
-    if not items:
-        draw.text((40, y_offset), "- ตรวจเช็กสภาพและบำรุงรักษาทั่วไป -", fill='#64748b', font=font_normal)
-        y_offset += 35
-    else:
-        for it_title, it_cost in items:
-            draw.text((40, y_offset), f"• {it_title}", fill='#334155', font=font_normal)
-            draw.text((510, y_offset), f"{it_cost:,.2f}", fill='#334155', font=font_normal, anchor="ra")
-            y_offset += 35
+        for font_path in font_paths:
+            try:
+                font_bold = ImageFont.truetype(font_path, 28)
+                font_normal = ImageFont.truetype(font_path, 18)
+                font_small = ImageFont.truetype(font_path, 14)
+                break
+            except (IOError, OSError):
+                continue
+        
+        # ถ้าไม่มีฟอนต์ไหนได้ ใช้ default
+        if font_bold is None:
+            font_bold = font_normal = font_small = ImageFont.load_default()
             
-    draw.line([(40, y_offset+10), (510, y_offset+10)], fill='#1E3A8A', width=3)
+        draw.rectangle([(0, 0), (550, 75)], fill='#1E3A8A')
+        draw.text((275, 38), "T&K ELECTRICAL SERVICE", fill='white', font=font_bold, anchor="mm")
+        
+        draw.text((40, 105), "ใบแจ้งซ่อม / ใบรับงาน", fill='#0f172a', font=font_bold)
+        draw.text((40, 145), f"เลขที่เอกสาร: TK-{bill_id}", fill='#334155', font=font_normal)
+        draw.text((40, 180), f"วันที่ปฏิบัติงาน: {current_date}", fill='#64748b', font=font_normal)
+        draw.line([(40, 215), (510, 215)], fill='#cbd5e1', width=2)
+        
+        draw.text((40, 235), f"ประเภทงาน: {job_type}", fill='#1e3a8a', font=font_bold)
+        draw.text((40, 270), f"ลูกค้า: {name}", fill='#334155', font=font_normal)
+        draw.text((40, 305), f"เบอร์โทรติดต่อ: {phone}", fill='#334155', font=font_normal)
+        if address:
+            draw.text((40, 340), f"สถานที่: {address}", fill='#334155', font=font_normal)
+            offset_y = 375
+        else:
+            offset_y = 340
+            
+        draw.text((40, offset_y), f"อุปกรณ์ที่ให้บริการ: {device}", fill='#334155', font=font_normal)
+        draw.text((40, offset_y+35), f"อาการชำรุด: {symptom if symptom else 'ตรวจเช็กสภาพระบบทั่วไป'}", fill='#334155', font=font_normal)
+        
+        draw.line([(40, offset_y+75), (510, offset_y+75)], fill='#cbd5e1', width=2)
+        
+        draw.text((40, offset_y+95), "รายละเอียดรายการวัสดุ / ค่าบริการ", fill='#0f172a', font=font_bold)
+        y_offset = offset_y + 135
+        
+        if not items:
+            draw.text((40, y_offset), "- ตรวจเช็กสภาพและบำรุงรักษาทั่วไป -", fill='#64748b', font=font_normal)
+            y_offset += 35
+        else:
+            for it_title, it_cost in items:
+                draw.text((40, y_offset), f"• {it_title}", fill='#334155', font=font_normal)
+                draw.text((510, y_offset), f"{it_cost:,.2f}", fill='#334155', font=font_normal, anchor="ra")
+                y_offset += 35
+                
+        draw.line([(40, y_offset+10), (510, y_offset+10)], fill='#1E3A8A', width=3)
+        
+        draw.text((40, y_offset+40), "รวมราคาทั้งสิ้นสุทธิ", fill='#0f172a', font=font_bold)
+        draw.text((510, y_offset+40), f"{total_price:,.2f} บาท", fill='#1E3A8A', font=font_bold, anchor="ra")
+        draw.line([(40, y_offset+75), (510, y_offset+75)], fill='#cbd5e1', width=1)
+        
+        y_cond = y_offset + 95
+        draw.text((40, y_cond), "เงื่อนไขการบริการ", fill='#1e3a8a', font=font_bold)
+        
+        cond_lines = [
+            "1. รับประกันงาน 30 วัน นับจากวันส่งมอบ",
+            "2. มัดจำอะไหล่เฉพาะทาง 50% ล่วงหน้า",
+            "3. ขอบคุณที่ไว้วางใจ T&K SERVICE"
+        ]
+        
+        y_cond += 35
+        for line in cond_lines:
+            draw.text((40, y_cond), line, fill='#475569', font=font_small)
+            y_cond += 28
+        
+        # บันทึกรูปภาพ
+        filename = f"bill_TK{bill_id}.png"
+        filepath = os.path.join('bills', filename)
+        img.save(filepath)
+        
+        print(f"✅ สร้างบิลสำเร็จ: {filename}")
+        return redirect(f"/?last_img={filename}")
     
-    draw.text((40, y_offset+40), "รวมราคาทั้งสิ้นสุทธิ", fill='#0f172a', font=font_bold)
-    draw.text((510, y_offset+40), f"{total_price:,.2f} บาท", fill='#1E3A8A', font=font_bold, anchor="ra")
-    draw.line([(40, y_offset+75), (510, y_offset+75)], fill='#cbd5e1', width=1)
-    
-    y_cond = y_offset + 95
-    draw.text((40, y_cond), "เงื่อนไขการบริการ", fill='#1e3a8a', font=font_bold)
-    
-    cond_lines = [
-        "1. รับประกันงาน 30 วัน นับจากวันส่งมอบ",
-        "2. มัดจำอะไหล่เฉพาะทาง 50% ล่วงหน้า",
-        "3. ขอบคุณที่ไว้วางใจ T&K SERVICE"
-    ]
-    
-    y_cond += 35
-    for line in cond_lines:
-        draw.text((40, y_cond), line, fill='#475569', font=font_small)
-        y_cond += 28
-    
-    # บันทึกรูปภาพ
-    filename = f"bill_TK{bill_id}.png"
-    filepath = os.path.join('bills', filename)
-    img.save(filepath)
-    
-    return redirect(f"/?last_img={filename}")
+    except Exception as e:
+        print(f"❌ เกิดข้อผิดพลาด: {str(e)}")
+        return f"เกิดข้อผิดพลาด: {str(e)}", 500
 
 @app.route('/get_image/<filename>')
 def get_image(filename):
@@ -255,8 +265,7 @@ def get_image(filename):
         return send_file(
             filepath,
             mimetype='image/png',
-            as_attachment=True,
-            download_name=filename
+            as_attachment=False,
         )
     except FileNotFoundError:
         return "ไฟล์ไม่พบ", 404
@@ -264,4 +273,6 @@ def get_image(filename):
         return f"เกิดข้อผิดพลาด: {str(e)}", 500
 
 if __name__ == '__main__':
+    print("🚀 เริ่มเซิร์ฟเวอร์ T&K SERVICE CREATOR")
+    print("📍 เปิด: http://127.0.0.1:5000")
     app.run(debug=True, host='0.0.0.0', port=5000)
