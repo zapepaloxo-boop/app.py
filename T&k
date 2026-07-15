@@ -116,9 +116,9 @@ HTML_TEMPLATE = """
             {% if last_img %}
                 <div class="success-message">✅ สร้างบิลสำเร็จ!</div>
                 <img src="/get_image/{{ last_img }}" class="receipt-preview">
-                <a href="/get_image/{{ last_img }}" download class="btn btn-success">📥 บันทึกรูปบิลลงเครื่องมือถือเพื่อพิมพ์</a>
+                <a href="/get_image/{{ last_img }}" download class="btn btn-success">📥 บันทึกรูปบิลลงเครื่องมือถือเพื่อพิมพ์/ส่งไลน์</a>
             {% else %}
-                <p style="color: #94a3b8; font-size: 14px; padding: 40px 0;">กรอกรายละเอียดงานและรายการอะไหล่ด้านบน จากนั้นกด "ประมวลผลและออกบิล" เพื่อสร้างใบแจ้งซ่อม</p>
+                <p style="color: #94a3b8; font-size: 14px; padding: 40px 0;">กรอกรายละเอียดงานและรายการอะไหล่ด้านบน จากนั้นคลิกปุ่ม "ประมวลผล" เพื่อสร้างบิล</p>
             {% endif %}
         </div>
     </div>
@@ -157,25 +157,27 @@ def create_bill():
                 total_price += p_val
 
         # สร้างรูปภาพ
-        img = Image.new('RGB', (550, 1150), color='white')
+        img = Image.new('RGB', (550, 1250), color='white')
         draw = ImageDraw.Draw(img)
         
-        # ลองใช้ font ตัวหนา หรือ default
+        # ลองใช้ font ที่รองรับภาษาไทย
         font_bold = font_normal = font_small = None
         font_paths = [
-            "ThaiFont.ttf",
-            "/usr/share/fonts/thai/Garuda.ttf",
             "/usr/share/fonts/truetype/thai/Garuda.ttf",
-            "/System/Library/Fonts/Tahoma.ttf",
-            "/usr/share/fonts/truetype/liberation/LiberationSerif-Bold.ttf",
+            "/usr/share/fonts/truetype/thai/Liberations.ttf",
+            "/usr/share/fonts/noto/NotoSansThai-Bold.ttf",
+            "/System/Library/Fonts/Arial.ttf",
+            "/Windows/Fonts/Arial.ttf",
+            "Arial.ttf",
         ]
         
         for font_path in font_paths:
             try:
-                font_bold = ImageFont.truetype(font_path, 28)
-                font_normal = ImageFont.truetype(font_path, 18)
-                font_small = ImageFont.truetype(font_path, 14)
-                break
+                if os.path.exists(font_path):
+                    font_bold = ImageFont.truetype(font_path, 20)
+                    font_normal = ImageFont.truetype(font_path, 16)
+                    font_small = ImageFont.truetype(font_path, 12)
+                    break
             except (IOError, OSError):
                 continue
         
@@ -183,47 +185,52 @@ def create_bill():
         if font_bold is None:
             font_bold = font_normal = font_small = ImageFont.load_default()
             
-        draw.rectangle([(0, 0), (550, 75)], fill='#1E3A8A')
-        draw.text((275, 38), "T&K ELECTRICAL SERVICE", fill='white', font=font_bold, anchor="mm")
+        # วาดหัวเรื่อง
+        draw.rectangle([(0, 0), (550, 70)], fill='#1E3A8A')
+        title_text = "T&K ELECTRICAL SERVICE"
+        draw.text((275, 35), title_text, fill='white', font=font_bold, anchor="mm")
         
-        draw.text((40, 105), "ใบแจ้งซ่อม / ใบรับงาน", fill='#0f172a', font=font_bold)
-        draw.text((40, 145), f"เลขที่เอกสาร: TK-{bill_id}", fill='#334155', font=font_normal)
-        draw.text((40, 180), f"วันที่ปฏิบัติงาน: {current_date}", fill='#64748b', font=font_normal)
-        draw.line([(40, 215), (510, 215)], fill='#cbd5e1', width=2)
+        # วาดข้อมูลทั่วไป
+        draw.text((40, 95), "ใบแจ้งซ่อม / ใบรับงาน", fill='#0f172a', font=font_bold)
+        draw.text((40, 120), f"เลขที่เอกสาร: TK-{bill_id}", fill='#334155', font=font_normal)
+        draw.text((40, 145), f"วันที่ปฏิบัติงาน: {current_date}", fill='#64748b', font=font_normal)
+        draw.line([(40, 170), (510, 170)], fill='#cbd5e1', width=2)
         
-        draw.text((40, 235), f"ประเภทงาน: {job_type}", fill='#1e3a8a', font=font_bold)
-        draw.text((40, 270), f"ลูกค้า: {name}", fill='#334155', font=font_normal)
-        draw.text((40, 305), f"เบอร์โทรติดต่อ: {phone}", fill='#334155', font=font_normal)
+        draw.text((40, 190), f"ประเภทงาน: {job_type}", fill='#1e3a8a', font=font_bold)
+        draw.text((40, 215), f"ลูกค้า: {name}", fill='#334155', font=font_normal)
+        draw.text((40, 240), f"เบอร์โทรติดต่อ: {phone}", fill='#334155', font=font_normal)
+        
+        offset_y = 265
         if address:
-            draw.text((40, 340), f"สถานที่: {address}", fill='#334155', font=font_normal)
-            offset_y = 375
+            draw.text((40, offset_y), f"สถานที่: {address}", fill='#334155', font=font_normal)
+            offset_y = 290
         else:
-            offset_y = 340
+            offset_y = 265
             
         draw.text((40, offset_y), f"อุปกรณ์ที่ให้บริการ: {device}", fill='#334155', font=font_normal)
-        draw.text((40, offset_y+35), f"อาการชำรุด: {symptom if symptom else 'ตรวจเช็กสภาพระบบทั่วไป'}", fill='#334155', font=font_normal)
+        draw.text((40, offset_y+25), f"อาการชำรุด: {symptom if symptom else 'ตรวจเช็กสภาพระบบทั่วไป'}", fill='#334155', font=font_normal)
         
-        draw.line([(40, offset_y+75), (510, offset_y+75)], fill='#cbd5e1', width=2)
+        draw.line([(40, offset_y+55), (510, offset_y+55)], fill='#cbd5e1', width=2)
         
-        draw.text((40, offset_y+95), "รายละเอียดรายการวัสดุ / ค่าบริการ", fill='#0f172a', font=font_bold)
-        y_offset = offset_y + 135
+        draw.text((40, offset_y+75), "รายละเอียดรายการวัสดุ / ค่าบริการ", fill='#0f172a', font=font_bold)
+        y_offset = offset_y + 105
         
         if not items:
             draw.text((40, y_offset), "- ตรวจเช็กสภาพและบำรุงรักษาทั่วไป -", fill='#64748b', font=font_normal)
-            y_offset += 35
+            y_offset += 30
         else:
             for it_title, it_cost in items:
                 draw.text((40, y_offset), f"• {it_title}", fill='#334155', font=font_normal)
-                draw.text((510, y_offset), f"{it_cost:,.2f}", fill='#334155', font=font_normal, anchor="ra")
-                y_offset += 35
+                draw.text((500, y_offset), f"{it_cost:,.2f}", fill='#334155', font=font_normal, anchor="rm")
+                y_offset += 30
                 
         draw.line([(40, y_offset+10), (510, y_offset+10)], fill='#1E3A8A', width=3)
         
-        draw.text((40, y_offset+40), "รวมราคาทั้งสิ้นสุทธิ", fill='#0f172a', font=font_bold)
-        draw.text((510, y_offset+40), f"{total_price:,.2f} บาท", fill='#1E3A8A', font=font_bold, anchor="ra")
-        draw.line([(40, y_offset+75), (510, y_offset+75)], fill='#cbd5e1', width=1)
+        draw.text((40, y_offset+30), "รวมราคาทั้งสิ้นสุทธิ", fill='#0f172a', font=font_bold)
+        draw.text((500, y_offset+30), f"{total_price:,.2f} บาท", fill='#1E3A8A', font=font_bold, anchor="rm")
+        draw.line([(40, y_offset+60), (510, y_offset+60)], fill='#cbd5e1', width=1)
         
-        y_cond = y_offset + 95
+        y_cond = y_offset + 80
         draw.text((40, y_cond), "เงื่อนไขการบริการ", fill='#1e3a8a', font=font_bold)
         
         cond_lines = [
@@ -232,10 +239,10 @@ def create_bill():
             "3. ขอบคุณที่ไว้วางใจ T&K SERVICE"
         ]
         
-        y_cond += 35
+        y_cond += 25
         for line in cond_lines:
             draw.text((40, y_cond), line, fill='#475569', font=font_small)
-            y_cond += 28
+            y_cond += 22
         
         # บันทึกรูปภาพ
         filename = f"bill_TK{bill_id}.png"
@@ -247,6 +254,8 @@ def create_bill():
     
     except Exception as e:
         print(f"❌ เกิดข้อผิดพลาด: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return f"เกิดข้อผิดพลาด: {str(e)}", 500
 
 @app.route('/get_image/<filename>')
