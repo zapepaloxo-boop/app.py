@@ -2,6 +2,7 @@ from flask import Flask, render_template_string, request, send_file, redirect
 from datetime import datetime
 from PIL import Image, ImageDraw, ImageFont
 import os
+import re
 
 app = Flask(__name__)
 
@@ -84,7 +85,7 @@ HTML_TEMPLATE = """
 
             <div class="form-group">
                 <label>ลักษณะอาการชำรุด / ปัญหาที่พบ</label>
-                <textarea name="symptom" rows="2" placeholder="ระบุรายละเอียดอาการเสียของอุปกรณ์"></textarea>
+                <textarea name="symptom" rows="2" placeholder="ระบุรายละเอียดอาการเสียของ��ุปกรณ์"></textarea>
             </div>
 
             <h2 style="font-size:14px; margin-top:20px; color:#1e3a8a;">🛠️ ตารางบันทึกวัสดุ / รายการอะไหล่ / ค่าบริการ</h2>
@@ -112,9 +113,9 @@ HTML_TEMPLATE = """
         <div class="receipt-box">
             {% if last_img %}
                 <img src="/get_image/{{ last_img }}" class="receipt-preview">
-                <a href="/get_image/{{ last_img }}" download class="btn btn-success">📥 บันทึกรูปบิลลงเครื่องมือถือเพื่อพิมพ์</a>
+                <a href="/get_image/{{ last_img }}" download class="btn btn-success">📥 บันทึกรูปบิลลงเครื่องมือถือเพื่อพิมพ์ปริ้นออก</a>
             {% else %}
-                <p style="color: #94a3b8; font-size: 14px; padding: 40px 0;">กรอกรายละเอียดงานและรายการอะไหล่ด้านบน จากนั้นกดปุ่มสร้างบิล</p>
+                <p style="color: #94a3b8; font-size: 14px; padding: 40px 0;">กรอกรายละเอียดงานและรายการอะไหล่ด้านบน จากนั้นกดปุ่ม ประมวลผล เพื่อสร้างบิล</p>
             {% endif %}
         </div>
     </div>
@@ -145,7 +146,7 @@ def create_bill():
         item_p = request.form.get(f'p{i}', '0')
         try:
             p_val = float(item_p) if item_p else 0.0
-        except:
+        except (ValueError, TypeError):
             p_val = 0.0
         if item_text:
             items.append((item_text, p_val))
@@ -170,7 +171,7 @@ def create_bill():
             font_normal = ImageFont.truetype(font_path, 24)
             font_small = ImageFont.truetype(font_path, 20)
             break
-        except:
+        except (IOError, OSError):
             continue
     
     # ถ้าไม่มีฟอนต์ไหนได้ ใช้ default
@@ -241,15 +242,26 @@ def create_bill():
 @app.route('/get_image/<filename>')
 def get_image(filename):
     """ดาวน์โหลดรูปภาพบิล"""
+    # ป้องกัน Path Traversal attack
+    if not re.match(r'^bill_TK\d{8}\.png$', filename):
+        return "ไฟล์ไม่ถูกต้อง", 400
+    
     try:
+        filepath = os.path.join('bills', filename)
+        # ตรวจสอบว่าไฟล์อยู่ในโฟลเดอร์ bills เท่านั้น
+        if not os.path.abspath(filepath).startswith(os.path.abspath('bills')):
+            return "ไฟล์ไม่ถูกต้อง", 400
+            
         return send_file(
-            os.path.join('bills', filename),
+            filepath,
             mimetype='image/png',
             as_attachment=True,
             download_name=filename
         )
     except FileNotFoundError:
         return "ไฟล์ไม่พบ", 404
+    except Exception as e:
+        return f"เกิดข้อผิดพลาด: {str(e)}", 500
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)
