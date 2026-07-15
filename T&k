@@ -114,7 +114,7 @@ HTML_TEMPLATE = """
                 <img src="/get_image/{{ last_img }}" class="receipt-preview">
                 <a href="/get_image/{{ last_img }}" download class="btn btn-success">📥 บันทึกรูปบิลลงเครื่องมือถือเพื่อพิมพ์</a>
             {% else %}
-                <p style="color: #94a3b8; font-size: 14px; padding: 40px 0;">กรอกรายละเอียดงานและรายการอะไหล่ด้านบน จากนั้นกดปุ่มเพื่อสร้างบิล</p>
+                <p style="color: #94a3b8; font-size: 14px; padding: 40px 0;">กรอกรายละเอียดงานและรายการอะไหล่ด้านบน จากนั้นกดปุ่มสร้างบิล</p>
             {% endif %}
         </div>
     </div>
@@ -156,17 +156,26 @@ def create_bill():
     draw = ImageDraw.Draw(img)
     
     # ลองใช้ font ตัวหนา หรือ default
-    try:
-        font_bold = ImageFont.truetype("ThaiFont.ttf", 34)
-        font_normal = ImageFont.truetype("ThaiFont.ttf", 24)
-        font_small = ImageFont.truetype("ThaiFont.ttf", 20)
-    except:
+    font_bold = font_normal = font_small = None
+    font_paths = [
+        "ThaiFont.ttf",
+        "/usr/share/fonts/thai/Garuda.ttf",
+        "/usr/share/fonts/truetype/thai/Garuda.ttf",
+        "/System/Library/Fonts/Tahoma.ttf",
+    ]
+    
+    for font_path in font_paths:
         try:
-            font_bold = ImageFont.truetype("/usr/share/fonts/thai/Garuda.ttf", 34)
-            font_normal = ImageFont.truetype("/usr/share/fonts/thai/Garuda.ttf", 24)
-            font_small = ImageFont.truetype("/usr/share/fonts/thai/Garuda.ttf", 20)
+            font_bold = ImageFont.truetype(font_path, 34)
+            font_normal = ImageFont.truetype(font_path, 24)
+            font_small = ImageFont.truetype(font_path, 20)
+            break
         except:
-            font_bold = font_normal = font_small = ImageFont.load_default()
+            continue
+    
+    # ถ้าไม่มีฟอนต์ไหนได้ ใช้ default
+    if font_bold is None:
+        font_bold = font_normal = font_small = ImageFont.load_default()
         
     draw.rectangle([(0, 0), (550, 75)], fill='#1E3A8A')
     draw.text((275, 38), "T&K ELECTRICAL SERVICE", fill='#FFFFFF', font=font_bold, anchor="mm")
